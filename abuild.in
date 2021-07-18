@@ -1892,8 +1892,10 @@ doc() {
 
 # predefined splitfunc dbg
 default_dbg() {
-	local f
+	local f stripopt=""
 	pkgdesc="$pkgdesc (debug symbols)"
+
+	options_has "debug_frame" && stripopt="--keep-section=.debug_frame"
 
 	scanelf -R "$pkgdir" | grep ET_DYN | sed "s:$pkgdir\/::g" | sed "s:ET_DYN ::g" | while read f; do
 		local ddbg_srcdir=$(dirname "$pkgdir/$f")
@@ -1907,7 +1909,7 @@ default_dbg() {
 		${CROSS_COMPILE}objcopy --only-keep-debug "$ddbg_srcfile" "$ddbg_dstfile"
 		${CROSS_COMPILE}objcopy --add-gnu-debuglink="$ddbg_dstfile" "$ddbg_srcdir/$ddbg_srcfile"
 		mv "$ddbg_dstfile" "$ddbg_dstdir"
-		${CROSS_COMPILE}strip "$ddbg_srcfile"
+		${CROSS_COMPILE}strip $stripopt "$ddbg_srcfile"
 		if [ -n "$xattr" ]; then
 			echo "$xattr" | "$SETFATTR" --restore=-
 		fi
@@ -2460,12 +2462,13 @@ stripbin() {
 	fi
 	cd "${subpkgdir:-$pkgdir}" || return 1
 
-	local stripcmd=strip
+	local stripcmd=strip stripopt=""
 	case "${subpkgarch:-$pkgarch}" in
 	$CBUILD_ARCH)	stripcmd="strip" ;;
 	$CARCH)		stripcmd="${CHOST}-strip" ;;
 	$CTARGET_ARCH)	stripcmd="${CTARGET}-strip" ;;
 	esac
+	options_has "debug_frame" && stripopt="--keep-section=.debug_frame"
 
 	msg "Stripping binaries"
 	scanelf --recursive --nobanner --osabi --etype "ET_DYN,ET_EXEC" . \
@@ -2476,7 +2479,7 @@ stripbin() {
 
 		[ "$osabi" != "STANDALONE" ] || continue
 		local XATTR=$(getfattr --match="" --dump "${filename}")
-		"${stripcmd}" "${filename}"
+		"${stripcmd}" $stripopt "${filename}"
 		if [ -n "$XATTR" ]; then
 			echo "$XATTR" | "$SETFATTR" --restore=-
 		fi
